@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>115年 勞健保費試算工具 | 禾宇合署會計師事務所</title>
+    <!-- 載入 Tailwind CSS 框架來處理樣式 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 載入 React 核心與 DOM 處理庫 -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- 載入 Babel 編譯器以在瀏覽器端直接解析 JSX 語法 -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <style>
+        body { font-family: 'PingFang TC', '微軟正黑體', sans-serif; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useMemo } = React;
+
+        // --- 內建圖示組件 ---
+        const Icon = ({ children, size = 24, className = "" }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                {children}
+            </svg>
+        );
+        const CalculatorIcon = ({ size, className }) => <Icon size={size} className={className}><rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="16" y1="14" x2="16" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/></Icon>;
+        const UserIcon = ({ size, className }) => <Icon size={size} className={className}><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></Icon>;
+        const BuildingIcon = ({ size, className }) => <Icon size={size} className={className}><rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/><path d="M12 10h.01"/><path d="M12 14h.01"/><path d="M16 10h.01"/><path d="M16 14h.01"/><path d="M8 10h.01"/><path d="M8 14h.01"/></Icon>;
+        const InfoIcon = ({ size, className }) => <Icon size={size} className={className}><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></Icon>;
+        const DollarSignIcon = ({ size, className }) => <Icon size={size} className={className}><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></Icon>;
+        const ChevronRightIcon = ({ size, className }) => <Icon size={size} className={className}><polyline points="9 18 15 12 9 6"/></Icon>;
+        const ExternalLinkIcon = ({ size, className }) => <Icon size={size} className={className}><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></Icon>;
+        const ListIcon = ({ size, className }) => <Icon size={size} className={className}><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></Icon>;
+
+        // --- 115年 (2026年) 勞健保級距表 ---
+        const partialLabor = [11100, 12540, 13500, 15840, 16500, 17280, 17880, 19047, 20008, 21009, 22000, 23100, 24000, 25250, 26400, 27600, 28590];
+        const partialPension = [1500, 3000, 4500, 6000, 7500, 8700, 9900, ...partialLabor];
+
+        const laborBrackets = [...partialLabor, 29500, 30300, 31800, 33300, 34800, 36300, 38200, 40100, 42000, 43900, 45800];
+        const healthBrackets = [
+            29500, 30300, 31800, 33300, 34800, 36300, 38200, 40100, 42000, 43900, 45800, 
+            48200, 50600, 53000, 55400, 57800, 60800, 63800, 66800, 69800, 72800, 76500, 
+            80200, 83900, 87600, 92100, 96600, 101100, 105600, 110100, 115500, 120900, 
+            126300, 131700, 137100, 142500, 147900, 150000, 156400, 162800, 169200, 175600, 
+            182000, 189500, 197000, 204500, 212000, 219500, 228200, 236900, 245600, 254300, 
+            263000, 273000, 283000, 293000, 303000, 313000
+        ];
+        const workAccidentBrackets = [...partialLabor, 29500, 30300, 31800, 33300, 34800, 36300, 38200, 40100, 42000, 43900, 45800, 48200, 50600, 53000, 55400, 57800, 60800, 63800, 66800, 69800, 72800];
+        const pensionBrackets = [...partialPension, 29500, 30300, 31800, 33300, 34800, 36300, 38200, 40100, 42000, 43900, 45800, 48200, 50600, 53000, 55400, 57800, 60800, 63800, 66800, 69800, 72800, 76500, 80200, 83900, 87600, 92100, 96600, 101100, 105600, 110100, 115500, 120900, 126300, 131700, 137100, 142500, 147900, 150000];
+
+        const getBracket = (salary, bracketsList, minBracket = 0) => {
+            const target = Math.max(salary, minBracket);
+            for (let bracket of bracketsList) {
+                if (target <= bracket) return bracket;
+            }
+            return bracketsList[bracketsList.length - 1]; 
+        };
+
+        // --- 身分連動規則 ---
+        const getInsuranceConfig = (identity) => {
+            const baseConfig = {
+                labor: { disabled: false, defaultChecked: true },
+                employment: { disabled: false, defaultChecked: true },
+                workAccident: { disabled: false, defaultChecked: true },
+                health: { disabled: false, defaultChecked: true },
+                pension: { disabled: false, defaultChecked: true }
+            };
+
+            if (identity === 'employee_had_received_pension') {
+                baseConfig.labor = { disabled: true, defaultChecked: false };
+                baseConfig.employment = { disabled: true, defaultChecked: false };
+                baseConfig.pension = { disabled: true, defaultChecked: true }; // 強制提繳
+            } else if (identity === 'employee_part_time') {
+                baseConfig.labor = { disabled: false, defaultChecked: true };
+                baseConfig.employment = { disabled: false, defaultChecked: true };
+                baseConfig.workAccident = { disabled: false, defaultChecked: true };
+                baseConfig.health = { disabled: false, defaultChecked: true };
+                baseConfig.pension = { disabled: false, defaultChecked: true };
+            } else if (identity === 'employee_foreigner') {
+                baseConfig.employment = { disabled: false, defaultChecked: false }; // 可自由勾選
+                baseConfig.pension = { disabled: false, defaultChecked: false };
+            } else if (identity.includes('employer')) {
+                baseConfig.employment = { disabled: true, defaultChecked: false };
+                baseConfig.pension = { disabled: true, defaultChecked: false }; // 雇主不可勾選勞退
+                baseConfig.labor = { disabled: false, defaultChecked: false }; // 雇主可自由加保
+                baseConfig.workAccident = { disabled: false, defaultChecked: false }; // 雇主可自由加保
+            }
+            return baseConfig;
+        };
+
+        function App() {
+            const [salary, setSalary] = useState(29500);
+            const [identity, setIdentity] = useState('employee');
+            const [dependents, setDependents] = useState(0);
+            const [voluntaryPension, setVoluntaryPension] = useState(0);
+            const [workAccidentRate, setWorkAccidentRate] = useState(0.11);
+            const [disability, setDisability] = useState(0);
+
+            const [insurances, setInsurances] = useState({
+                labor: true, employment: true, workAccident: true, health: true, pension: true
+            });
+
+            const handleInsuranceToggle = (key) => {
+                setInsurances(prev => ({ ...prev, [key]: !prev[key] }));
+            };
+
+            const handleIdentityChange = (e) => {
+                const val = e.target.value;
+                setIdentity(val);
+                
+                const config = getInsuranceConfig(val);
+                setInsurances({
+                    labor: config.labor.defaultChecked,
+                    employment: config.employment.defaultChecked,
+                    workAccident: config.workAccident.defaultChecked,
+                    health: config.health.defaultChecked,
+                    pension: config.pension.defaultChecked
+                });
+            };
+
+            const calculation = useMemo(() => {
+                const isPartTime = identity === 'employee_part_time';
+                const minLabor = isPartTime ? 11100 : 29500;
+                const minPension = isPartTime ? 1500 : 29500;
+                
+                const laborBracket = insurances.labor || insurances.employment ? getBracket(salary, laborBrackets, minLabor) : 0;
+                const pensionBracket = insurances.pension || voluntaryPension > 0 ? getBracket(salary, pensionBrackets, minPension) : 0;
+                
+                // 雇主職災預設最高級距 72,800
+                let waBracket = insurances.workAccident ? getBracket(salary, workAccidentBrackets, minLabor) : 0;
+                if (insurances.workAccident && identity.includes('employer')) {
+                    waBracket = 72800; 
+                }
+                
+                const minHealth = identity === 'employer_with_less_than_5_workers' ? 42000 : 
+                                  identity === 'employer_with_more_than_5_workers' ? 45800 : 29500;
+                const healthBracket = insurances.health ? getBracket(salary, healthBrackets, minHealth) : 0;
+
+                const laborRate = 0.115;
+                const employmentRate = 0.01;
+                const healthRate = 0.0517;
+                const avgDependents = 0.56; 
+
+                const effectiveDependents = Math.min(dependents, 3);
+
+                // --- 判斷是否為雇主 (健保不論有無勞保皆為100%自付) ---
+                const isEmployerSelfPaid = identity.includes('employer');
+                const empHealthRatio = isEmployerSelfPaid ? 1.0 : 0.3;
+                const compHealthRatio = isEmployerSelfPaid ? 0 : 0.6;
+
+                // --- 員工負擔計算 ---
+                const baseEmpLabor = Math.round(laborBracket * laborRate * 0.2);
+                const empLabor = insurances.labor ? baseEmpLabor - Math.round(baseEmpLabor * disability) : 0;
+                
+                const baseEmpEmployment = Math.round(laborBracket * employmentRate * 0.2);
+                const empEmployment = insurances.employment ? baseEmpEmployment - Math.round(baseEmpEmployment * disability) : 0;
+                
+                const baseEmpHealth = Math.round(healthBracket * healthRate * empHealthRatio);
+                const empHealthOwnSubsidized = baseEmpHealth - Math.round(baseEmpHealth * disability); 
+                const empHealthDependents = baseEmpHealth * effectiveDependents; 
+                const empHealth = insurances.health ? empHealthOwnSubsidized + empHealthDependents : 0;
+                
+                const empPension = voluntaryPension > 0 ? Math.round(pensionBracket * (voluntaryPension / 100)) : 0;
+                
+                const empLaborTotal = empLabor + empEmployment;
+                const empTotal = empLaborTotal + empHealth + empPension;
+
+                // --- 公司負擔計算 ---
+                const compLabor = insurances.labor ? Math.round(laborBracket * laborRate * 0.7) : 0;
+                const compEmployment = insurances.employment ? Math.round(laborBracket * employmentRate * 0.7) : 0;
+                const compWorkAccident = insurances.workAccident ? Math.round(waBracket * (workAccidentRate / 100)) : 0;
+                const compHealth = (insurances.health && !isEmployerSelfPaid) ? Math.round(healthBracket * healthRate * compHealthRatio * (1 + avgDependents)) : 0;
+                const compPension = insurances.pension ? Math.round(pensionBracket * 0.06) : 0;
+
+                const compLaborTotal = compLabor + compEmployment + compWorkAccident;
+                const compTotal = compLaborTotal + compHealth + compPension;
+
+                return {
+                    brackets: { labor: laborBracket, health: healthBracket, pension: pensionBracket, workAccident: waBracket },
+                    employee: {
+                        labor: empLabor, employment: empEmployment, laborTotal: empLaborTotal, health: empHealth, pension: empPension, total: empTotal
+                    },
+                    company: {
+                        labor: compLabor, employment: compEmployment, workAccident: compWorkAccident, laborTotal: compLaborTotal, health: compHealth, pension: compPension, total: compTotal
+                    },
+                    meta: { isEmployerSelfPaid }
+                };
+            }, [salary, identity, dependents, voluntaryPension, workAccidentRate, disability, insurances]);
+
+            return (
+                <div className="min-h-screen bg-[#f8fafc] text-slate-800 font-sans p-4 md:p-8 flex justify-center">
+                    <div className="max-w-5xl w-full space-y-6">
+                        
+                        {/* Header */}
+                        <header className="flex flex-col md:flex-row items-center justify-between bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                            <div className="flex items-center space-x-4 mb-4 md:mb-0">
+                                <div className="p-3 bg-sky-100 text-sky-600 rounded-xl">
+                                    <CalculatorIcon size={28} />
+                                </div>
+                                <div>
+                                    <h1 className="text-2xl font-bold text-slate-800">115年 勞健保費試算工具</h1>
+                                    <p className="text-sm text-slate-500 mt-1">基本工資 $29,500 ｜ 健保費率 5.17%</p>
+                                </div>
+                            </div>
+                            <div className="text-right">
+                                <div className="text-sm font-semibold text-sky-700">禾宇合署會計師事務所</div>
+                                <div className="text-xs text-slate-400">您的稅務與帳務專業後盾</div>
+                            </div>
+                        </header>
+
+                        <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+                            
+                            {/* 左側：輸入表單 */}
+                            <div className="md:col-span-5 bg-white p-6 rounded-2xl shadow-sm border border-slate-100 space-y-6">
+                                <h2 className="text-lg font-bold flex items-center text-slate-700 border-b pb-3">
+                                    <span className="w-1.5 h-5 bg-sky-500 rounded-full mr-2"></span>
+                                    設定試算條件
+                                </h2>
+
+                                {/* 身分選擇 */}
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-slate-600">投保身分</label>
+                                    <div className="relative">
+                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                            <UserIcon size={16} className="text-slate-400" />
+                                        </div>
+                                        <select 
+                                            value={identity}
+                                            onChange={handleIdentityChange}
+                                            className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-sky-500 appearance-none transition-all cursor-pointer"
+                                        >
+                                            <option value="employee">員工 (一般全職)</option>
+                                            <option value="employee_part_time">兼職員工 (部分工時)</option>
+                                            <option value="employee_had_received_pension">已請領退休金之員工</option>
+                                            <option value="employee_foreigner">外國員工</option>
+                                            <option value="employer_with_less_than_5_workers">雇主（員工未滿五人）</option>
+                                            <option value="employer_with_more_than_5_workers">雇主（員工五人以上）</option>
+                                        </select>
+                                        <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                                            <ChevronRightIcon size={16} className="text-slate-400 rotate-90" />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 投保情況 */}
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-slate-600">投保情況 (選填)</label>
+                                    <div className="flex flex-wrap gap-3 p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                                        {[
+                                            { id: 'labor', label: '勞保' },
+                                            { id: 'employment', label: '就保' },
+                                            { id: 'workAccident', label: '職保' },
+                                            { id: 'health', label: '健保' },
+                                            { id: 'pension', label: '勞退' },
+                                        ].map((item) => {
+                                            const currentConfig = getInsuranceConfig(identity);
+                                            const isDisabled = currentConfig[item.id].disabled;
+                                            return (
+                                                <label key={item.id} className={`flex items-center space-x-2 ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
+                                                    <input
+                                                        type="checkbox"
+                                                        disabled={isDisabled}
+                                                        checked={insurances[item.id]}
+                                                        onChange={() => handleInsuranceToggle(item.id)}
+                                                        className={`w-4 h-4 text-sky-600 border-slate-300 rounded focus:ring-sky-500 ${isDisabled ? 'bg-slate-200 cursor-not-allowed' : 'cursor-pointer'}`}
+                                                    />
+                                                    <span className="text-sm text-slate-700">{item.label}</span>
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                {/* 動態註解 (僅在特定身分出現) */}
+                                {(identity === 'employee_had_received_pension' || identity.includes('employer') || identity === 'employee_part_time') && (
+                                    <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl text-xs text-amber-800 space-y-1.5 mt-2 shadow-sm">
+                                        {identity === 'employee_part_time' && (
+                                            <p>註：兼職員工 (部分工時) 勞保及職保最低級距為 11,100 元，勞退最低為 1,500 元。健保無部分工時級距，最低仍以基本工資 29,500 元計算。</p>
+                                        )}
+                                        {identity === 'employee_had_received_pension' && (
+                                            <>
+                                                <p>註：已領取勞保老年給付或退休金者，不得再參加勞/就保。雇主得為其辦理職災保險，且應為其提繳勞退。</p>
+                                                <p>註：受僱於兩個以上雇主時，健保以主要工作單位投保即可。</p>
+                                            </>
+                                        )}
+                                        {identity.includes('employer') && (
+                                            <>
+                                                <p>註 1：雇主勞保、職災保險依照是否從事工作可自由加保。</p>
+                                                <p>註 2：未達五人之公司行號，健保負責人得舉證以最低級距 42,000 元投保；達五人之公司行號，得舉證以 45,800 元投保。</p>
+                                                <p>註 3：雇主職保應以 72,800 元級距投保，得自行舉證調降其投保級距，本表一律以 72,800 計算。</p>
+                                                <p>註 4：雇主之健保費為 100% 自行負擔，公司無須負擔。</p>
+                                            </>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* 薪資輸入 */}
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-slate-600 flex items-center">
+                                        月薪 (新台幣)
+                                    </label>
+                                    <div className="relative">
+                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                            <DollarSignIcon size={16} className="text-slate-400" />
+                                        </div>
+                                        <input 
+                                            type="text" 
+                                            inputMode="numeric"
+                                            value={salary === 0 ? '' : salary.toLocaleString()}
+                                            onChange={(e) => setSalary(Number(e.target.value.replace(/\D/g, '')))}
+                                            className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none transition-all"
+                                        />
+                                    </div>
+                                    {identity === 'employee' && salary > 0 && salary < 29500 && (
+                                        <p className="text-xs text-amber-600 mt-1.5 flex items-center">
+                                            <InfoIcon size={14} className="mr-1 shrink-0" />
+                                            提示：輸入金額低於全職基本工資 (29,500元)，若為兼職請至上方改選「兼職員工 (部分工時)」。
+                                        </p>
+                                    )}
+                                    {identity === 'employee_part_time' && salary >= 29500 && (
+                                        <p className="text-xs text-amber-600 mt-1.5 flex items-center">
+                                            <InfoIcon size={14} className="mr-1 shrink-0" />
+                                            提示：輸入金額已達全職基本工資 (29,500元) 以上，建議至上方改選「員工 (一般全職)」。
+                                        </p>
+                                    )}
+                                </div>
+
+                                {/* 職災費率 */}
+                                <div className="space-y-2">
+                                    <div className="flex justify-between items-end">
+                                        <label className="text-sm font-medium text-slate-600 flex items-center">
+                                            職災保險費率 (%) - 雇主負擔
+                                        </label>
+                                        <a 
+                                            href="https://www.bli.gov.tw/0107174.html" 
+                                            target="_blank" 
+                                            rel="noopener noreferrer"
+                                            className="text-xs text-sky-600 hover:text-sky-800 flex items-center transition-colors"
+                                        >
+                                            查詢行業別費率 <ExternalLinkIcon size={12} className="ml-1" />
+                                        </a>
+                                    </div>
+                                    <input
+                                        type="number"
+                                        value={workAccidentRate}
+                                        onChange={(e) => setWorkAccidentRate(Number(e.target.value))}
+                                        className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none transition-all"
+                                        min="0"
+                                        step="0.01"
+                                    />
+                                </div>
+
+                                {/* 扶養人數 & 勞退自提 */}
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium text-slate-600">勞退自願提繳</label>
+                                        <select 
+                                            value={voluntaryPension} 
+                                            onChange={(e) => setVoluntaryPension(Number(e.target.value))}
+                                            className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-sky-500"
+                                        >
+                                            {[0, 1, 2, 3, 4, 5, 6].map(rate => <option key={rate} value={rate}>{rate}%</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium text-slate-600">健保扶養人數</label>
+                                        <select 
+                                            value={dependents} 
+                                            onChange={(e) => setDependents(Number(e.target.value))}
+                                            className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-sky-500"
+                                        >
+                                            <option value={0}>0 人</option>
+                                            <option value={1}>1 人</option>
+                                            <option value={2}>2 人</option>
+                                            <option value={3}>3 人 (含以上)</option>
+                                        </select>
+                                    </div>
+                                    <div className="space-y-2 col-span-2">
+                                        <label className="text-sm font-medium text-slate-600">身心障礙補助等級</label>
+                                        <select 
+                                            value={disability} 
+                                            onChange={(e) => setDisability(Number(e.target.value))}
+                                            className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-sky-500"
+                                        >
+                                            <option value={0}>無</option>
+                                            <option value={0.25}>輕度 (補助 1/4)</option>
+                                            <option value={0.5}>中度 (補助 1/2)</option>
+                                            <option value={1}>重度 / 極重度 (全額補助)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 右側：計算結果與明細 */}
+                            <div className="md:col-span-7 space-y-6">
+                                
+                                {/* 級距資訊小卡 */}
+                                <div className="bg-sky-50 rounded-2xl p-4 flex items-start space-x-3 border border-sky-100 shadow-sm">
+                                    <InfoIcon className="text-sky-500 mt-0.5 shrink-0" size={20} />
+                                    <div className="text-sm text-sky-800 space-y-1 w-full">
+                                        <p className="font-semibold border-b border-sky-200 pb-1 mb-2">適用投保級距判定：</p>
+                                        <div className="grid grid-cols-3 gap-2 font-medium">
+                                            <div className="bg-white/60 px-2 py-1.5 rounded text-center">勞保<br/>$ {calculation.brackets.labor > 0 ? calculation.brackets.labor.toLocaleString() : '-'}</div>
+                                            <div className="bg-white/60 px-2 py-1.5 rounded text-center">健保<br/>$ {calculation.brackets.health > 0 ? calculation.brackets.health.toLocaleString() : '-'}</div>
+                                            <div className="bg-white/60 px-2 py-1.5 rounded text-center">勞退<br/>$ {calculation.brackets.pension > 0 ? calculation.brackets.pension.toLocaleString() : '-'}</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 員工與公司負擔卡片 */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    
+                                    {/* 員工負擔 */}
+                                    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                                        <div className="bg-slate-50 p-4 border-b border-slate-100">
+                                            <h3 className="text-slate-600 font-bold flex items-center">
+                                                <UserIcon size={18} className="mr-2" /> 個人負擔
+                                            </h3>
+                                        </div>
+                                        <div className="p-5 space-y-4">
+                                            <div className="flex justify-between items-center text-sm text-slate-600">
+                                                <span>勞保 + 就保費</span>
+                                                <span className="font-medium">$ {calculation.employee.laborTotal.toLocaleString()}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center text-sm text-slate-600">
+                                                <span>健保費 (含眷屬)</span>
+                                                <span className="font-medium">$ {calculation.employee.health.toLocaleString()}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center text-sm text-slate-600 border-b border-slate-100 pb-4">
+                                                <span>勞退自提 ({voluntaryPension}%)</span>
+                                                <span className="font-medium">$ {calculation.employee.pension.toLocaleString()}</span>
+                                            </div>
+                                            <div className="flex justify-between items-end pt-2">
+                                                <span className="text-sm font-bold text-slate-800">每月應扣總額</span>
+                                                <span className="text-2xl font-bold text-sky-600">$ {calculation.employee.total.toLocaleString()}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* 公司負擔 */}
+                                    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                                        <div className="bg-slate-50 p-4 border-b border-slate-100">
+                                            <h3 className="text-slate-600 font-bold flex items-center">
+                                                <BuildingIcon size={18} className="mr-2" /> 公司負擔
+                                            </h3>
+                                        </div>
+                                        <div className="p-5 space-y-4">
+                                            <div className="flex justify-between items-center text-sm text-slate-600">
+                                                <span>勞保 + 就保費</span>
+                                                <span className="font-medium">$ {calculation.company.laborTotal.toLocaleString()}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center text-sm text-slate-600">
+                                                <span>職災保險費 ({workAccidentRate}%)</span>
+                                                <span className="font-medium">$ {calculation.company.workAccident.toLocaleString()}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center text-sm text-slate-600">
+                                                <span>健保費 (雇主負擔)</span>
+                                                <span className="font-medium">$ {calculation.company.health.toLocaleString()}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center text-sm text-slate-600 border-b border-slate-100 pb-4">
+                                                <span>勞工退休金 (6%)</span>
+                                                <span className="font-medium">$ {calculation.company.pension.toLocaleString()}</span>
+                                            </div>
+                                            <div className="flex justify-between items-end pt-2">
+                                                <span className="text-sm font-bold text-slate-800">每月人事成本</span>
+                                                <span className="text-2xl font-bold text-slate-700">$ {calculation.company.total.toLocaleString()}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 計算明細區塊 */}
+                                <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                                    <div className="bg-slate-50 p-4 border-b border-slate-100">
+                                        <h3 className="text-slate-600 font-bold flex items-center">
+                                            <ListIcon size={18} className="mr-2" /> 計算明細
+                                        </h3>
+                                    </div>
+                                    <div className="p-5 text-sm text-slate-600 space-y-4">
+                                        <div>
+                                            <h4 className="font-semibold text-slate-700 mb-1">【個人負擔】</h4>
+                                            <ul className="list-disc pl-5 space-y-1 text-slate-500">
+                                                {insurances.labor && <li>勞保：{calculation.brackets.labor.toLocaleString()} × 11.5% × 20% {disability > 0 ? `× (1 - ${disability})` : ''} ≒ {calculation.employee.labor.toLocaleString()}</li>}
+                                                {insurances.employment && <li>就保：{calculation.brackets.labor.toLocaleString()} × 1.0% × 20% {disability > 0 ? `× (1 - ${disability})` : ''} ≒ {calculation.employee.employment.toLocaleString()}</li>}
+                                                {insurances.health && <li>健保：{calculation.brackets.health.toLocaleString()} × 5.17% × {calculation.meta.isEmployerSelfPaid ? '100%' : '30%'} × ({disability > 0 ? `本人補助後 1` : '本人 1 人'} + 扶養 {dependents} 人) ≒ {calculation.employee.health.toLocaleString()}</li>}
+                                                {voluntaryPension > 0 && <li>勞退自提：{calculation.brackets.pension.toLocaleString()} × {voluntaryPension}% ≒ {calculation.employee.pension.toLocaleString()}</li>}
+                                            </ul>
+                                        </div>
+                                        <div className="border-t border-slate-100 pt-3">
+                                            <h4 className="font-semibold text-slate-700 mb-1">【公司負擔】</h4>
+                                            <ul className="list-disc pl-5 space-y-1 text-slate-500">
+                                                {insurances.labor && <li>勞保：{calculation.brackets.labor.toLocaleString()} × 11.5% × 70% ≒ {calculation.company.labor.toLocaleString()}</li>}
+                                                {insurances.employment && <li>就保：{calculation.brackets.labor.toLocaleString()} × 1.0% × 70% ≒ {calculation.company.employment.toLocaleString()}</li>}
+                                                {insurances.workAccident && <li>職保：{calculation.brackets.workAccident.toLocaleString()} × {workAccidentRate}% ≒ {calculation.company.workAccident.toLocaleString()}</li>}
+                                                {insurances.health && !calculation.meta.isEmployerSelfPaid && <li>健保：{calculation.brackets.health.toLocaleString()} × 5.17% × 60% × (本人 1 人 + 平均眷口 0.56) ≒ {calculation.company.health.toLocaleString()}</li>}
+                                                {insurances.pension && <li>勞退提撥：{calculation.brackets.pension.toLocaleString()} × 6% ≒ {calculation.company.pension.toLocaleString()}</li>}
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 免責聲明移至最下方左側 */}
+                        <div className="pt-6 border-t border-slate-200/60 text-xs text-slate-400 text-left space-y-1.5">
+                            <p>* 本工具僅供試算參考。實際計算結果可能因情況、適用法規或其他因素而有所不同，使用者應自行確認所輸入與選取資料的正確性及完整性；本事務所及會計師對於任何因使用本計算機所產生的錯誤或損失不承擔責任。</p>
+                            <p>* 職災保險費依各行業別費率有所不同，請依實際適用費率輸入計算。</p>
+                            <p>* 如具有特殊身分（如身心障礙等）享有健保補助款，實際金額另外計算。</p>
+                        </div>
+
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
